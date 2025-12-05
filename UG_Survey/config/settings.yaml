@@ -1,0 +1,38 @@
+﻿database:
+  # Uses MSSQL_URL env var, e.g.
+  #   mssql+pyodbc://@s8-whse-sql-d01/ugsurvey?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes
+  url: "${MSSQL_URL}"
+
+app:
+  log_dir: logs
+  log_level: INFO
+
+load:
+  stage_table: dbo.tbl_stage_UG_Survey
+  encoding_fallbacks: ["utf-8", "windows-1252"]
+  chunksize: 5000
+
+paths:
+  archive: F:/Dat/UGSurvey/Archive
+
+reference:
+  #country_csv: "data/reference/tbl_Country.csv"
+  #state_csv: "data/reference/tbl_state.csv"
+  #external_org_csv: "data/reference/tbl_external_org_details.csv"
+  #nsc_ipeds_csv: "data/reference/tbl_ug_survey_nsc_ipeds_codes.csv"
+ # We are NOT currently loading these from CSV.
+  # The ETL uses the live lp_reference DB tables directly.
+  source: "db"
+  country_table: "lp_reference.dbo.tbl_Country"
+  state_table: "lp_reference.dbo.tbl_state"
+  external_org_table: "lp_reference.dbo.tbl_external_org_details"
+  nsc_ipeds_table: "ugs.tbl_ug_survey_nsc_ipeds_codes"
+
+email:
+  enabled: true
+  smtp_host: smtp.psu.edu
+  smtp_port: 25
+  use_starttls: false
+  from_addr: L-DWEMAIL@LISTS.PSU.EDU
+  to_addrs: L-sarakaj@psu.edu
+  subject_prefix: "[UGSurvey]"

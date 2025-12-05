@@ -1,0 +1,28 @@
+﻿# Declarative table schema (for validation and documentation; not DDL)
+table: dbo.tbl_stage_raw_survey
+primary_key: [id]  # if exists
+columns:
+  - name: STUDENT_ID
+    type: CHAR(9)
+    required: true
+  - name: TERM
+    type: CHAR(4)
+    required: true
+  - name: MAJOR
+    type: VARCHAR(50)
+    required: false
+  - name: SURVEY_DATE
+    type: DATETIME
+    required: false
+  - name: CONN_TO_PSU_RESPONSE
+    type: VARCHAR(50)
+  - name: EMPL_JOB_LRNED
+    type: VARCHAR(50)
+  - name: INTERN_IND
+    type: CHAR(1)
+  - name: INTERN_LRNED
+    type: VARCHAR(100)
+# Optional ETL metadata (added if add_metadata_columns=true)
+metadata_columns:
+  - FILE_NAME VARCHAR(255)
+  - LOAD_TS DATETIME

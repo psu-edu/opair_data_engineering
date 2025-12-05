@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ug_survey"
+version = "0.1.0"
+description = "UG Survey ETL"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.2",
+    "SQLAlchemy>=2.0",
+    "pyodbc>=5.1",
+    "python-dotenv>=1.0",
+    "ruamel.yaml>=0.18",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

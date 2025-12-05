@@ -1,0 +1,20 @@
+﻿# Maps CSV headers to staging table columns. Left side = CSV column, right side = DB column.
+# Adjust to match real files.
+CSV_HEADER_TO_DB_COLUMN:
+  STUDENT_ID: STUDENT_ID
+  TERM: TERM
+  MAJOR: MAJOR
+  SURVEY_DATE: SURVEY_DATE
+  CONN_TO_PSU_RESPONSE: CONN_TO_PSU_RESPONSE
+  EMPL_JOB_LRNED: EMPL_JOB_LRNED
+  INTERN_IND: INTERN_IND
+  INTERN_LRNED: INTERN_LRNED
+
+# Columns to coerce (simple examples)
+TYPE_CASTS:
+  SURVEY_DATE: datetime
+  INTERN_IND: str
+
+# Default values if CSV missing or blank
+DEFAULTS:
+  INTERN_IND: "N"

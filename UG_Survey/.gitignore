@@ -1,0 +1,11 @@
+﻿# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+logs/*.log
+logs/archive/
+data/incoming/
+data/archive/
+data/quarantine/
+.ipynb_checkpoints

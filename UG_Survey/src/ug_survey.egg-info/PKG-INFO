@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: ug_survey
+Version: 0.1.0
+Summary: UG Survey ETL
+Requires-Python: >=3.10
+Requires-Dist: pandas>=2.2
+Requires-Dist: SQLAlchemy>=2.0
+Requires-Dist: pyodbc>=5.1
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: ruamel.yaml>=0.18
