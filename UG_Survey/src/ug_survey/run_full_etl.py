@@ -2,20 +2,25 @@
 """
 Run a complete UG Survey ETL and send an email summary.
 
-Example:
+Examples:
+    # Single file
     python -m ug_survey.run_full_etl --env DEV --mode test --raw-file "F:/Dat/UGSurvey/UGSurveyData_202324SP_11_5_25.csv"
+
+    # Multiple files using glob pattern
+    python -m ug_survey.run_full_etl --env DEV --mode test --raw-file "F:/Dat/UGSurvey/UGSurveyData_*.csv"
 """
 
 import argparse
 import logging
 import os
+import glob
+from pathlib import Path
 import smtplib
 import subprocess
 import sys
 import traceback
 from datetime import datetime
 from email.message import EmailMessage
-from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from ug_survey.config import load_settings
@@ -156,6 +161,7 @@ def send_email_summary(
     start_ts: datetime,
     end_ts: datetime,
     settings: Optional[Dict[str, Any]] = None,
+    raw_file: Optional[Path] = None,
 ) -> None:
     any_failed = any(not s["ok"] for s in steps)
     status = "FAILURE" if any_failed else "SUCCESS"
@@ -178,7 +184,8 @@ def send_email_summary(
 
     to_list = [addr.strip() for addr in to_addrs_setting.split(",") if addr.strip()]
 
-    subject = f"{subject_prefix} {status} (env={env}, mode={mode})"
+    file_info = f" file={raw_file.name}" if raw_file is not None else ""
+    subject = f"{subject_prefix} {status} (env={env}, mode={mode}{file_info})"
     LOGGER.info("Preparing email to %s with subject: %s", to_list, subject)
 
     lines: List[str] = []
@@ -186,6 +193,8 @@ def send_email_summary(
     lines.append("")
     lines.append(f"Environment : {env}")
     lines.append(f"Mode        : {mode}")
+    if raw_file is not None:
+        lines.append(f"Raw file    : {raw_file}")
     lines.append(f"Start Time  : {start_ts}")
     lines.append(f"End Time    : {end_ts}")
     lines.append(f"Duration    : {end_ts - start_ts}")
@@ -255,7 +264,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--raw-file",
         required=True,
-        help="Path to the UG Survey raw CSV file to load.",
+        help=(
+            "Path to the UG Survey raw CSV file, or a glob pattern "
+            'such as "F:/Dat/UGSurvey/UGSurveyData_*.csv".'
+        ),
     )
     parser.add_argument(
         "--mssql-url",
@@ -268,6 +280,55 @@ def parse_args() -> argparse.Namespace:
         help="Path to settings YAML (default: config/settings.yaml)",
     )
     return parser.parse_args()
+
+
+# ----------------------------------------------------------------------
+# Run ETL for a single raw file
+# ----------------------------------------------------------------------
+def run_full_etl_for_file(
+    env: str,
+    mode: str,
+    raw_path: Path,
+    logfile: Path,
+    settings: Dict[str, Any],
+) -> int:
+    LOGGER.info("================================================================")
+    LOGGER.info("Starting FULL ETL for file: %s (env=%s mode=%s)", raw_path, env, mode)
+    LOGGER.info("================================================================")
+
+    if not raw_path.is_file():
+        LOGGER.error("Raw file does not exist: %s", raw_path)
+        return 1
+
+    # Detect survey type + inferred term (for logging / future branching)
+    survey_type = detect_survey_type(str(raw_path))
+    term_label = infer_term_from_filename(str(raw_path))
+
+    LOGGER.info("Detected survey type: %s", survey_type)
+    if term_label:
+        LOGGER.info("Inferred term from file name: %s", term_label)
+
+    steps_to_run = build_steps(str(raw_path))
+
+    start_ts = datetime.now()
+    step_results: List[Dict[str, Any]] = []
+
+    for name, cmd in steps_to_run:
+        res = run_step(name, cmd)
+        step_results.append(res)
+        if not res["ok"]:
+            LOGGER.error("Stopping ETL for file %s due to failure in step: %s", raw_path, name)
+            break
+
+    end_ts = datetime.now()
+    send_email_summary(env, mode, step_results, logfile, start_ts, end_ts, settings, raw_file=raw_path)
+
+    if any(not s["ok"] for s in step_results):
+        LOGGER.error("One or more steps FAILED for file %s. See log for details: %s", raw_path, logfile)
+        return 1
+
+    LOGGER.info("All steps completed successfully for file: %s", raw_path)
+    return 0
 
 
 # ----------------------------------------------------------------------
@@ -295,43 +356,41 @@ def main() -> int:
         os.environ["MSSQL_URL"] = args.mssql_url
         LOGGER.info("MSSQL_URL overridden via --mssql-url")
 
-    LOGGER.info("Starting FULL ETL (env=%s mode=%s)", args.env, args.mode)
+    incoming_dir = Path("F:/Dat/UGSurvey")  # or read from settings.yaml
+    pattern = incoming_dir / "UGSurveyData_*.csv"
 
-    # Ensure raw file exists
-    raw_path = Path(args.raw_file)
-    if not raw_path.is_file():
-        LOGGER.error("Raw file does not exist: %s", raw_path)
+    LOGGER.info("Looking for incoming files matching %s", pattern)
+    matched_files = sorted(glob.glob(str(pattern)))
+
+    if not matched_files:
+        LOGGER.info("No UGSurveyData_*.csv files found. Nothing to process.")
+        return 0
+
+    if len(matched_files) > 1:
+        LOGGER.error("Multiple incoming files found. Please archive or remove extras:")
+        for f in matched_files:
+            LOGGER.error(" - %s", f)
         return 1
 
-    # Detect survey type + inferred term (for logging / future branching)
-    survey_type = detect_survey_type(str(raw_path))
-    term_label = infer_term_from_filename(str(raw_path))
+    raw_path = Path(matched_files[0])
+    LOGGER.info("Found file to process: %s", raw_path)
 
-    LOGGER.info("Detected survey type: %s", survey_type)
-    if term_label:
-        LOGGER.info("Inferred term from file name: %s", term_label)
+    for f in matched_files:
+        LOGGER.info(" - %s", f)
 
-    steps_to_run = build_steps(str(raw_path))
+    overall_rc = 0
+    for f in matched_files:
+        rc = run_full_etl_for_file(
+            env=args.env,
+            mode=args.mode,
+            raw_path=Path(f),
+            logfile=logfile,
+            settings=settings,
+        )
+        if rc != 0:
+            overall_rc = rc
 
-    start_ts = datetime.now()
-    step_results: List[Dict[str, Any]] = []
-
-    for name, cmd in steps_to_run:
-        res = run_step(name, cmd)
-        step_results.append(res)
-        if not res["ok"]:
-            LOGGER.error("Stopping ETL due to failure in step: %s", name)
-            break
-
-    end_ts = datetime.now()
-    send_email_summary(args.env, args.mode, step_results, logfile, start_ts, end_ts, settings)
-
-    if any(not s["ok"] for s in step_results):
-        LOGGER.error("One or more steps FAILED. See log for details: %s", logfile)
-        return 1
-
-    LOGGER.info("All steps completed successfully.")
-    return 0
+    return overall_rc
 
 
 if __name__ == "__main__":

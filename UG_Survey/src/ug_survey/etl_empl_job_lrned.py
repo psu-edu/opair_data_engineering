@@ -8,7 +8,7 @@ ETL for ugs.tbl_ug_survey_empl_job_lrned
 This is a simple fact table:
     stud_id (char(9))
     term (char(4))
-    empl_lmed_abt_job_cd (int)
+    empl_lrned_abt_job_cd (int)
     empl_lmed_abt_job (varchar(300))
     load_date (datetime, set in ETL or defaulted in SQL)
 
@@ -128,8 +128,8 @@ def transform_empl_job_lrned(stage_df: pd.DataFrame) -> pd.DataFrame:
     Output columns:
         stud_id               char(9)
         term                  char(4)
-        empl_lmed_abt_job_cd  int
-        empl_lmed_abt_job     varchar(300)
+        empl_lrned_abt_job_cd  int
+        empl_lrned_abt_job     varchar(300)
         load_date             datetime
     """
     if stage_df.empty:
@@ -171,8 +171,8 @@ def transform_empl_job_lrned(stage_df: pd.DataFrame) -> pd.DataFrame:
                 {
                     "stud_id": stud_id,
                     "term": term,
-                    "empl_lmed_abt_job_cd": code,
-                    "empl_lmed_abt_job": description,
+                    "empl_lrned_abt_job_cd": code,
+                    "empl_lrned_abt_job": description,
                     "load_date": datetime.now(timezone.utc),
                 }
             )
@@ -180,7 +180,6 @@ def transform_empl_job_lrned(stage_df: pd.DataFrame) -> pd.DataFrame:
     out_df = pd.DataFrame.from_records(records)
     logger.info("Transformed to %s empl_job_lrned rows", len(out_df))
     return out_df
-
 
 # ------------------------------ LOAD -----------------------------------
 
@@ -192,8 +191,8 @@ def load_empl_job_lrned(engine: Engine, df: pd.DataFrame) -> None:
     We only insert:
         stud_id,
         term,
-        empl_lmed_abt_job_cd,
-        empl_lmed_abt_job,
+        empl_lrned_abt_job_cd,
+        empl_lrned_abt_job,
         load_date
 
     The [id] column is IDENTITY and is not included in the INSERT.
@@ -206,8 +205,8 @@ def load_empl_job_lrned(engine: Engine, df: pd.DataFrame) -> None:
     cols = [
         "stud_id",
         "term",
-        "empl_lmed_abt_job_cd",
-        "empl_lmed_abt_job",
+        "empl_lrned_abt_job_cd",
+        "empl_lrned_abt_job",
         "load_date",
     ]
     df = df[cols].where(pd.notnull(df), None)
@@ -216,8 +215,8 @@ def load_empl_job_lrned(engine: Engine, df: pd.DataFrame) -> None:
         INSERT INTO ugs.tbl_ug_survey_empl_job_lrned (
             stud_id,
             term,
-            empl_lmed_abt_job_cd,
-            empl_lmed_abt_job,
+            empl_lrned_abt_job_cd,
+            empl_lrned_abt_job,
             load_date
         ) VALUES (?, ?, ?, ?, ?)
     """

@@ -34,5 +34,5 @@ email:
   smtp_port: 25
   use_starttls: false
   from_addr: L-DWEMAIL@LISTS.PSU.EDU
-  to_addrs: L-sarakaj@psu.edu
+  to_addrs: L-jjs7199@psu.edu
   subject_prefix: "[UGSurvey]"

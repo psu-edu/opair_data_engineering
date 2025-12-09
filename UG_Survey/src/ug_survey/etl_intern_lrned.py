@@ -16,7 +16,6 @@ Target table:
         load_date DATETIME
     )
 """
-from sqlalchemy import create_engine, text
 import os
 import sys
 import logging
@@ -24,7 +23,7 @@ from datetime import datetime, timezone
 from typing import Dict, List
 
 import pandas as pd
-
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 LOGGER_NAME = "UG_Survey"
@@ -226,12 +225,8 @@ def transform_intern_lrned(stage_df: pd.DataFrame) -> pd.DataFrame:
     df = stage_df.copy()
 
     # Normalize IDs
-    df["stud_id"] = (
-        df["stud_id"].astype(str).str.strip().str.zfill(9)
-    )
-    df["term"] = (
-        df["term"].astype(str).str.strip().str.zfill(4)
-    )
+    df["stud_id"] = df["stud_id"].astype(str).str.strip().str.zfill(9)
+    df["term"] = df["term"].astype(str).str.strip().str.zfill(4)
 
     # Normalize intern_count to int where possible
     def _to_int(x):
@@ -318,6 +313,8 @@ def transform_intern_lrned(stage_df: pd.DataFrame) -> pd.DataFrame:
                 )
 
     out_df = pd.DataFrame.from_records(records)
+    # Safety net: ensure we don't send the identity column
+    out_df = out_df.drop(columns=["id"], errors="ignore")
     logger.info("Transformed to %s intern_lrned rows", len(out_df))
     return out_df
 
@@ -326,14 +323,16 @@ def transform_intern_lrned(stage_df: pd.DataFrame) -> pd.DataFrame:
 # LOAD
 # ---------------------------------------------------------------------
 
+
 def load_intern_lrned(
     engine: Engine, df: pd.DataFrame, truncate_before: bool = True
 ) -> None:
     """
     Insert internship learned-about rows into ugs.tbl_ug_survey_intern_lrned.
 
-    NOTE: Table ugs.tbl_ug_survey_intern_lrned has a NON-IDENTITY, NOT NULL 'id'
-    column, so we must generate ids ourselves.
+    IMPORTANT:
+    - Target table has IDENTITY column [id], so we do NOT insert into it.
+    - SQL Server will auto-generate [id] values.
     """
     if df.empty:
         logger.info("No rows to insert into ugs.tbl_ug_survey_intern_lrned.")
@@ -345,20 +344,11 @@ def load_intern_lrned(
             logger.info("Truncating ugs.tbl_ug_survey_intern_lrned ...")
             conn.execute(text("TRUNCATE TABLE ugs.tbl_ug_survey_intern_lrned;"))
 
-    # Determine starting id (after truncate this will be 0)
-    with engine.connect() as conn:
-        start_id = conn.execute(
-            text("SELECT ISNULL(MAX(id), 0) FROM ugs.tbl_ug_survey_intern_lrned;")
-        ).scalar_one()
-    logger.info("Current max(id) in ugs.tbl_ug_survey_intern_lrned = %s", start_id)
-
-    # Add id column to df
+    # We do NOT generate or insert id; let identity handle it
     df = df.copy()
-    df["id"] = range(start_id + 1, start_id + 1 + len(df))
 
-    # Column order must match INSERT
+    # Column order must match INSERT (no id)
     cols = [
-        "id",
         "stud_id",
         "term",
         "intern_nbr",
@@ -371,7 +361,6 @@ def load_intern_lrned(
 
     insert_sql = """
         INSERT INTO ugs.tbl_ug_survey_intern_lrned (
-            id,
             stud_id,
             term,
             intern_nbr,
@@ -379,7 +368,7 @@ def load_intern_lrned(
             intern_lrned_abt,
             load_date
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
     """
 
     # Use raw connection + executemany for speed
